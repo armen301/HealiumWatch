@@ -28,7 +28,8 @@ private const val STOPPED_PATH = "/stopped"
 private const val PLAY_PATH = "/start"
 private const val PLAYED_PATH = "/started"
 private const val FINISH_PATH = "/finish"
-private const val HEAR_RATE_PATH = "/heart-rate"
+private const val AUTHORIZE_PATH = "/authorize"
+private const val HEART_RATE_PATH = "/heart-rate"
 
 class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvider,
         SensorEventListener2, MessageClient.OnMessageReceivedListener {
@@ -39,6 +40,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        AmbientModeSupport.attach(this)
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         startButton = findViewById(R.id.actionStart)
@@ -51,10 +54,6 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         }
 
         Wearable.getMessageClient(this).addListener(this)
-
-        if (!isBodySensorPermissionGranted()) {
-            requestPermissions(arrayOf(Manifest.permission.BODY_SENSORS), PERMISSIONS_REQUEST)
-        }
     }
 
     private fun registerListener() {
@@ -75,8 +74,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         event?.let {
             if (it.sensor.type != TYPE_HEART_RATE) return@let
 
-            val putDataReq: PutDataRequest = PutDataMapRequest.create(HEAR_RATE_PATH).run {
-                dataMap.putFloat(HEAR_RATE_PATH, it.values[0])
+            val putDataReq: PutDataRequest = PutDataMapRequest.create(HEART_RATE_PATH).run {
+                dataMap.putFloat(HEART_RATE_PATH, it.values[0])
                 asPutDataRequest()
             }
             Wearable.getDataClient(this).putDataItem(putDataReq)
@@ -88,6 +87,15 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
             STOP_PATH -> unregisterListener()
             PLAY_PATH -> registerListener()
             FINISH_PATH -> finish()
+            AUTHORIZE_PATH -> {
+                if (!isBodySensorPermissionGranted()) {
+                    requestPermissions(arrayOf(Manifest.permission.BODY_SENSORS), PERMISSIONS_REQUEST)
+                } else {
+                    sendMessageToHandheld(PERMISSION_PATH, DataMap().apply {
+                        putInt(PERMISSION_PATH, 2)
+                    })
+                }
+            }
         }
     }
 
@@ -118,7 +126,8 @@ class MainActivity : FragmentActivity(), AmbientModeSupport.AmbientCallbackProvi
         }
         // Send info to handheld
         sendMessageToHandheld(PERMISSION_PATH, DataMap().apply {
-            putInt(PERMISSION_PATH, grantResults[0])
+            val result = if (grantResults[0] == PackageManager.PERMISSION_GRANTED) 2 else 1
+            putInt(PERMISSION_PATH, result)
         })
     }
 
